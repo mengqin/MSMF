@@ -1,0 +1,29 @@
+<h_file_template>
+#ifndef __%INCLUDE_FILENAME_CAP%__
+#define __%INCLUDE_FILENAME_CAP%__
+
+typedef struct _%STRUCT_NAME% {
+	int size;
+	%ARG_TYPE% value;
+} %STRUCT_NAME%;
+
+%STRUCT_NAME% *%FUNCTION_NAME% (%ARG_TYPE% *in);
+#endif
+</h_file_template>
+<c_file_template>
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include "%INCLUDE_FILENAME%"
+
+%STRUCT_NAME% *%FUNCTION_NAME% (%ARG_TYPE% *in)
+{
+	%STRUCT_NAME% *ret = NULL;
+
+	ret = (%STRUCT_NAME% *)calloc(1, sizeof(%STRUCT_NAME%));
+	ret->size = sizeof(%ARG_TYPE%);
+	memcpy(&amp;ret-&gt;value, in, sizeof(%ARG_TYPE%));
+
+	return ret;
+}
+</c_file_template>

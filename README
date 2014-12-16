@@ -1,0 +1,30 @@
+M-Simple Makefile Framework Readme
+====================================
+
+	M-Simple Makefile Framework is easy makefile for developer who build product 
+with fixed compiler and system. This framework didn't consider any problem about 
+migrating code from different platform, you need fix your tool-chain. This tool
+only valid for GNU tool-chain and run under bash shell.
+
+	There is 3 makefiles in this framework, the rule.mk is core makefile which 
+contain the real rules for make. The common.mk is global configure for the whole
+project. Makefile include these 2 files and it's the "worker" makefile.
+
+How To
+====================================
+
+	Most of time, rule.mk and common.mk should put on the top directory of the 
+project. And every sub directory should put a Makefile in it. After copy the 
+Makefile to all sub directory you should correct the TOPDIR in every Makefile.
+It must direct to the top directory and using releative path.
+	There are 2 shell scripts to help deploy makfile and correct the TOPDIR in
+them.
+	You can get more information in common.mk and Makefile, read the comment and 
+learn how to configure your Makefile.
+	Enjoy it!
+
+License
+====================================
+There is no license here, you can use it as your wish. BUT YOU MUST KEEP THIS LINE 
+BELOW DON'T BEING REMOVED OR MODIFIED.
+Author: h_f22@163.com		Date:	2014/12/16
