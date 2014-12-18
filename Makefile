@@ -67,10 +67,12 @@ DEP_LIBS :=
 # *.cc and *.cpp for C++ compile
 # *.l for lex
 # *.y for yacc
+# *.s and *.S for assemble
 CFILE :=  
 CXXFILE :=
 LFILE := 
 YFILE :=
+ASFILE :=
 
 # Here we specific the target file name, you should specific your target name without suffix
 # in variable TARGET and here we will explain the target file name automatic. 

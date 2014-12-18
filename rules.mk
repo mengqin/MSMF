@@ -68,6 +68,9 @@ YFILE := $(wildcard *.y)
 CFILE += $(foreach cfile,$(YFILE),$(cfile).c)
 endif
 
+ifeq (_$(ASFILE)_,__)
+ASFILE := $(wildcard *.s *.S)
+endif
 
 # DEP_TEMP_DIR is directory for storage dependance file generate by gcc -M (.d suffix file).
 # OBJ_TEMP_DIR is directory for storage obj file generate by gcc (,o suffix file).
@@ -288,7 +291,9 @@ CFILE_OBJS := $(addprefix $(OBJ_TEMP_DIR)/,$(addsuffix .o, $(basename $(CFILE)))
 
 CXXFILE_OBJS := $(addprefix $(OBJ_TEMP_DIR)/,$(addsuffix .oo, $(basename $(CXXFILE))))
 
-OBJS_LIST := $(CFILE_OBJS) $(CXXFILE_OBJS) $(DEP_DIR_OBJS)
+ASFILE_OBJS := $(addprefix $(OBJ_TEMP_DIR)/,$(addsuffix .os, $(basename $(ASFILE))))
+
+OBJS_LIST := $(ASFILE_OBJS) $(CFILE_OBJS) $(CXXFILE_OBJS) $(DEP_DIR_OBJS)
 
 # This is main procedure for all, here we support pre-process shell script and post-process
 # shell script, if you specific them use PRE_SCRIPT and POST_SCRIPT they will be called
@@ -348,11 +353,32 @@ endif
 	$(Q)$(LEX) $(LFLAGS) -o $(2) $(1)
 endef
 
+# Define for assemble file.
+# This rule generate .os file and depend .s or .S file
+# This rule also prepare directory for depend file and obj file.
+define COMPILE_AS_template =
+-include $(DEP_TEMP_DIR)/$(notdir $(2:%.os=%.ds))
+$(2): $(1)
+ifneq (_$(BUILD_TYPE)_,_top_)
+	$(Q)$(shell if [ ! -d $(DEP_TEMP_DIR) ]; then \
+		mkdir -p $(DEP_TEMP_DIR); \
+	fi)
+	$(Q)$(shell if [ ! -d $(OBJ_TEMP_DIR) ]; then \
+		mkdir -p $(OBJ_TEMP_DIR); \
+	fi)
+endif
+ifeq (_$(Q)_,_@_)
+	@echo -e "	[AS]	$(dir $(shell pwd))$(1)"
+endif
+	$(Q)$(CC) $(CFLAGS) $(INCLUDE) $$< -MM -MF $(DEP_TEMP_DIR)/$(notdir $(2:%.os=%.ds)) -MT '$(2)'
+	$(Q)$(CC) $(CFLAGS) $(INCLUDE) -c $$< -o $$@
+endef
+
 # Define for C complie file.
 # This rule generate .o file and depend .c file
 # This rule also prepare directory for depend file and obj file.
 define COMPILE_C_template =
--include $(DEP_TEMP_DIR)/$(addsuffix .d,$(basename $(1)))
+-include $(DEP_TEMP_DIR)/$(notdir $(2:%.o=%.d))
 $(2): $(1)
 ifneq (_$(BUILD_TYPE)_,_top_)
 	$(Q)$(shell if [ ! -d $(DEP_TEMP_DIR) ]; then \
@@ -365,8 +391,7 @@ endif
 ifeq (_$(Q)_,_@_)
 	@echo -e "	[CC]	$(dir $(shell pwd))$(1)"
 endif
-	$(Q)$(CC) -MM $(CFLAGS) $(INCLUDE) $$< > $(DEP_TEMP_DIR)/$(addsuffix .d,$(basename $(1)))
-	$(Q)sed -z -i 's/^/$(OBJ_TEMP_DIR)\//' $(DEP_TEMP_DIR)/$(addsuffix .d,$(basename $(1)))
+	$(Q)$(CC) $(CFLAGS) $(INCLUDE) $$< -MM -MF $(DEP_TEMP_DIR)/$(notdir $(2:%.o=%.d)) -MT '$(2)'
 	$(Q)$(CC) $(CFLAGS) $(INCLUDE) -c $$< -o $$@
 endef
 
@@ -374,7 +399,7 @@ endef
 # This rule generate .oo file and depend .cc or .cpp file
 # This rule also prepare directory for depend file and obj file.
 define COMPILE_CXX_template =
--include $(DEP_TEMP_DIR)/$(addsuffix .dxx,$(basename $(1)))
+-include $(DEP_TEMP_DIR)/$(notdir $(2:%.oo=%.dxx))
 $(2): $(1)
 ifneq (_$(BUILD_TYPE)_,_top_)
 	$(Q)$(shell if [ ! -d $(DEP_TEMP_DIR) ]; then \
@@ -387,8 +412,7 @@ endif
 ifeq (_$(Q)_,_@_)
 	@echo -e "	[CXX]	$(dir $(shell pwd))$(1)"
 endif
-	$(Q)$(CXX) -MM $(CXXFLAGS) $(CXXINCLUDE) $$< > $(DEP_TEMP_DIR)/$(addsuffix .dxx,$(basename $(1)))
-	$(Q)sed -z -i 's/^/$(OBJ_TEMP_DIR)\//' $(DEP_TEMP_DIR)/$(addsuffix .dxx,$(basename $(1)))
+	$(Q)$(CXX) $(CXXFLAGS) $(CXXINCLUDE) $$< -MM -MF $(DEP_TEMP_DIR)/$(notdir $(2:%.oo=%.dxx)) -MT '$(2)'
 	$(Q)$(CXX) $(CXXFLAGS) $(CXXINCLUDE) -c $$< -o $$@
 endef
 
@@ -511,6 +535,8 @@ endef
 $(foreach file,$(LFILE),$(eval $(call COMPILE_L_template,$(file),$(file).c)))
 
 $(foreach file,$(YFILE),$(eval $(call COMPILE_Y_template,$(file),$(file).c)))
+
+$(foreach file,$(ASFILE),$(eval $(call COMPILE_AS_template,$(file),$(addprefix $(OBJ_TEMP_DIR)/,$(basename $(file)).os))))
 
 $(foreach file,$(CFILE),$(eval $(call COMPILE_C_template,$(file),$(addprefix $(OBJ_TEMP_DIR)/,$(basename $(file)).o))))
 

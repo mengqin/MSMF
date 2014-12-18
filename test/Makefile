@@ -34,6 +34,7 @@ CFILE :=
 CXXFILE :=
 LFILE := 
 YFILE :=
+ASFILE :=
 
 TARGET := 
 

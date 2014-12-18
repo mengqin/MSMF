@@ -27,7 +27,7 @@ CC := gcc
 CXX := g++
 CFLAGS := -O2 -Wall -Wno-unused-function -Wno-return-type
 CXXFLAGS := $(CFLAGS)
-LD := $(CC)
+LD := $(CC)  # here we strongly recommand use gcc as linker instead of ld unless you want link your own libc
 LO := $(CC)
 INCLUDE := 
 CXXINCLUDE := $(INCLUDE)
@@ -54,7 +54,9 @@ YACC := bison
 YFLAGS := -d
 MAKE := make
 STRIP := strip
-STRIP_FLAGS := 
+STRIP_FLAGS :=
+AS := $(CC) # here we strongly recommand use gcc as assembler unless you want call your own pre-processor but not cpp
+ASFLAGS := $(CFLAGS)
 
 # Debug mode, this will close optimization of compiler and add -g switch for debug 
 # information
