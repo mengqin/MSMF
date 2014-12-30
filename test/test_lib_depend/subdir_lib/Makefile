@@ -25,7 +25,7 @@ TOPDIR := ../..
 include $(TOPDIR)/common.mk
 
 SUBDIR =  
-DEP_DIR = 
+DEP_DIR = all
 NON_DEP_DIR =
 
 DEP_LIBS :=

@@ -114,8 +114,14 @@ endif
 # 2. your must specific the lib file's name same as the library target file name exactly.
 # 3. Here we add the source code directory of the library into linking lib search path list (LIBPATH)
 #
+# About LIB_DEPEND_SOURCE
+# This variable is a global variable in the whole build makefile tree, all makefile record it's absolution
+# path if it has DEP_LIBS to be build. This variable will transfer to every sub makefile, and the some one 
+# has a loop dependance in the tree it will cut it's own SUBDIR or DEP_DIR accord this variable. This method 
+# will avoid sub directory loop dependance. 
 ifneq (_$(DEP_LIBS)_,__)
 LIBPATH += $(addprefix -L ,$(dir $(DEP_LIBS)))
+LIB_DEPEND_SOURCE += $(shell pwd)
 endif
 
 # Here you can specific your library's link type (static or dynamic) in these 2 variable.
@@ -138,7 +144,7 @@ endif
 # This is only valid for dyn-lib build type.
 # Here dyn lib use independent LDFLAGS because other type needn't rpath
 ifneq (_$(LIB_RPATH)_,__)
-ifeq (_$(BUILD_TYPE)_,_dyn-lib_)
+ifeq (_$(filter dyn-lib, $(BUILD_TYPE))_,_dyn-lib_)
 LDFLAGS_DYNLIB := $(LDFLAGS) $(foreach rpath,$(LIB_RPATH),-Wl,-rpath=$(rpath)) 
 endif
 endif
@@ -151,6 +157,22 @@ endif
 
 TARGET := $(strip $(TARGET))
 BUILD_TYPE := $(strip $(BUILD_TYPE))
+
+ifeq (_$(PARENT_BUILD_TYPE)_,__)
+PARENT_BUILD_TYPE := $(BUILD_TYPE)
+endif
+
+ifeq (_$(filter dyn-lib, $(PARENT_BUILD_TYPE))_,_dyn-lib_)
+ifeq (_$(filter obj, $(BUILD_TYPE))_,_obj_)
+CFLAGS += -fPIC
+CXXFLAGS += -fPIC
+endif
+endif
+
+ifeq (_$(filter dyn-lib, $(BUILD_TYPE))_,_dyn-lib_)
+CFLAGS += -fPIC
+CXXFLAGS += -fPIC
+endif
 
 # Here we specific the target file name, you should specific your target name without suffix
 # in variable TARGET and here we will explain the target file name automatic. 
@@ -253,12 +275,13 @@ endif
 
 # SUBDIR is used to specific the sub directory which you want build but not link to 
 # the current target, if you want some sub directory generate middle obj file and need 
-# link them to target you should specific it in DEP_DIR. But if you left blank in DEP_DIR
-# this will lead to DEP_DIR use SUBDIR directly, and then all sub directory will link to
-# the target.
+# link them to target you should specific it in DEP_DIR. 
 #
-# The SUBDIR variable can support keyword 'all', use this keyword specific all sub directory
+# These variables can support keyword 'all', use this keyword specific all sub directory
 # which includes Makefile in current directory.
+#
+# If there are same directorys in SUBDIR and DEP_DIR, DEP_DIR will exclude these same
+# directorys, so make sure all SUBDIR is build to bin file but not obj.
 #
 # Build type top will clear DEP_DIR and it will only build sub directory but not link them 
 # together. We suppose this is fact:
@@ -267,14 +290,22 @@ endif
 ifeq (_$(strip $(SUBDIR))_,_all_)
 SUBDIR := $(sort $(shell for f in `ls`; do if [ -d $$f ] && [ -e $$f/Makefile ]; then echo $$f; fi; done))
 endif
-ifneq (_$(BUILD_TYPE)_,_top_)
-ifeq (_$(DEP_DIR)_,__)
-DEP_DIR := $(SUBDIR)
+ifeq (_$(strip $(DEP_DIR))_,_all_)
+DEP_DIR := $(sort $(shell for f in `ls`; do if [ -d $$f ] && [ -e $$f/Makefile ]; then echo $$f; fi; done))
 endif
-else
+ifneq (_$(filter $(DEP_DIR), $(SUBDIR))_,__)
+DEP_DIR := $(filter-out $(DEP_DIR, $(SUBDIR)))
+$(warning DEP_DIR have same dirs in SUBDIR, ignore them, DEP_DIR = $(DEP_DIR))
+endif
+ifeq (_$(BUILD_TYPE)_,_top_)
 DEP_DIR := 
 endif
 
+# See Above About LIB_DEPEND_SOURCE variable, Don't modify this unless you know what you do.
+ifneq (_$(LIB_DEPEND_SOURCE)_,__)
+SUBDIR:=$(notdir $(filter-out $(LIB_DEPEND_SOURCE), $(addprefix $(shell pwd)/,$(SUBDIR))))
+DEP_DIR:=$(notdir $(filter-out $(LIB_DEPEND_SOURCE), $(addprefix $(shell pwd)/,$(DEP_DIR))))
+endif
 
 # Here we sort file sequence and generate OBJS_LIST for compile.
 # C obj file is end with .o and C++ obj file is end with .oo all of them should be in 
@@ -422,9 +453,13 @@ endef
 define COMPILE_DEP_DIR_template =
 $(2):
 ifeq (_$(Q)_,_@_)
-	+$(Q)${MAKE} -s -C $(1)
+	$(Q)export PARENT_BUILD_TYPE="$(PARENT_BUILD_TYPE)"; \
+	export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
+	${MAKE} -s -C $(1)
 else
-	+$(Q)${MAKE} -C $(1)
+	$(Q)export PARENT_BUILD_TYPE="$(PARENT_BUILD_TYPE)"; \
+	export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
+	${MAKE} -C $(1)
 endif
 endef
 
@@ -436,11 +471,13 @@ define COMPILE_SUBDIR_template =
 $(1)_dir:
 ifeq (_$$(filter $(1),$(DEP_DIR))_,__)
 ifeq (_$(Q)_,_@_)
-	+$(Q)${MAKE} depend -s -C $(1)
-	+$(Q)${MAKE} -s -C $(1)
+	$(Q)export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
+	${MAKE} depend -s -C $(1); \
+	${MAKE} -s -C $(1)
 else
-	+$(Q)${MAKE} depend -C $(1)
-	+$(Q)${MAKE} -C $(1)
+	$(Q)export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
+	${MAKE} depend -C $(1); \
+	${MAKE} -C $(1)
 endif
 endif
 endef
@@ -458,18 +495,22 @@ endef
 define COMPILE_DEP_LIBS_template =
 $(1):
 ifeq (_$(Q)_,_@_)
-	+$(Q)${MAKE} -s -C $(dir $(1))
+	$(Q)export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
+	${MAKE} -s -C $(dir $(1))
 else
-	+$(Q)${MAKE} -C $(dir $(1))
+	$(Q)export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
+	${MAKE} -C $(dir $(1))
 endif
 endef
 
 define COMPILE_CHECK_DEP_LIBS_template =
 depcheck_$(1):
 ifeq (_$(Q)_,_@_)
-	+$(Q)${MAKE} -s -C $(dir $(1))
+	$(Q)export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
+	${MAKE} -s -C $(dir $(1))
 else
-	+$(Q)${MAKE} -C $(dir $(1))
+	$(Q)export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
+	${MAKE} -C $(dir $(1))
 endif
 endef
 
@@ -583,7 +624,7 @@ ifeq (_$(filter dyn-lib,$(BUILD_TYPE))_,_dyn-lib_)
 ifeq (_$(Q)_,_@_)
 	@echo -e "	[LD]	$(dir $(shell pwd))$(TARGET_FILENAME_DLIB)"
 endif
-	$(Q)$(LD) $(OBJS_LIST) $(CFLAGS) $(LDFLAGS) $(LIBS) $(LIBPATH) -fPIC -shared -Wl,-soname,$(TARGET).so -o $(TARGET_FILENAME_DLIB)
+	$(Q)$(LD) $(OBJS_LIST) $(CFLAGS) $(LDFLAGS) $(LIBS) $(LIBPATH) -shared -Wl,-soname,$(TARGET).so -o $(TARGET_FILENAME_DLIB)
 endif
 endif
 
@@ -613,10 +654,12 @@ subdir_clean:
 ifneq (_$(SUBDIR)_,__)
 ifeq (_$(Q)_,_@_)
 	$(Q)for d in $(SUBDIR); do \
+		export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
 		${MAKE} clean -s -C $$d; \
 	done
 else
 	$(Q)for d in $(SUBDIR); do \
+		export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
 		${MAKE} clean -C $$d; \
 	done
 endif
@@ -624,10 +667,12 @@ endif
 ifneq (_$(DEP_DIR)_,__)
 ifeq (_$(Q)_,_@_)
 	$(Q)for d in $(DEP_DIR); do \
+		export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
 		${MAKE} clean -s -C $$d; \
 	done
 else
 	$(Q)for d in $(DEP_DIR); do \
+		export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
 		${MAKE} clean -C $$d; \
 	done
 endif
@@ -635,10 +680,12 @@ endif
 ifneq (_$(DEP_LIBS)_,__)
 ifeq (_$(Q)_,_@_)
 	$(Q)for d in $(DEP_LIBS); do \
+		export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
 		${MAKE} clean -s -C $$(dirname $$d); \
 	done
 else
 	$(Q)for d in $(DEP_LIBS); do \
+		export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
 		${MAKE} clean -C $$(dirname $$d); \
 	done
 endif
@@ -818,10 +865,12 @@ subdir_install:
 ifneq (_$(SUBDIR)_,__)
 ifeq (_$(Q)_,_@_)
 	$(Q)for d in $(SUBDIR); do \
+		export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
 		${MAKE} install -s -C $$d; \
 	done
 else
 	$(Q)for d in $(SUBDIR); do \
+		export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
 		${MAKE} install -C $$d; \
 	done
 endif
@@ -829,21 +878,25 @@ endif
 ifneq (_$(DEP_DIR)_,__)
 ifeq (_$(Q)_,_@_)
 	$(Q)for d in $(DEP_DIR); do \
+		export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
 		${MAKE} install -s -C $$d; \
-	done
+	done;
 else
 	$(Q)for d in $(DEP_DIR); do \
+		export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
 		${MAKE} install -C $$d; \
 	done
 endif
 endif
 ifneq (_$(DEP_LIBS)_,__)
 ifeq (_$(Q)_,_@_)
-	$(Q)for d in $(DEP_LIBS); do \
+	for d in $(DEP_LIBS); do \
+		export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
 		${MAKE} install -s -C $$(dirname $$d); \
 	done
 else
-	$(Q)for d in $(DEP_LIBS); do \
+	for d in $(DEP_LIBS); do \
+		export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
 		${MAKE} install -C $$(dirname $$d); \
 	done
 endif
@@ -853,7 +906,12 @@ endif
 # Obj file needn't install
 .PHONY: real_install
 ifneq (_$(BUILD_TYPE)_,_obj_)
-real_install: subdir_install strip 
+real_install: subdir_install
+ifeq (_$(Q)_,_@_)
+	$(Q)make -s strip
+else
+	$(Q)make strip
+endif
 else
 real_install: subdir_install
 endif
