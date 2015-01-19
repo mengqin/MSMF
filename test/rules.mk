@@ -294,7 +294,7 @@ ifeq (_$(strip $(DEP_DIR))_,_all_)
 DEP_DIR := $(sort $(shell for f in `ls`; do if [ -d $$f ] && [ -e $$f/Makefile ]; then echo $$f; fi; done))
 endif
 ifneq (_$(filter $(DEP_DIR), $(SUBDIR))_,__)
-DEP_DIR := $(filter-out $(DEP_DIR, $(SUBDIR)))
+DEP_DIR := $(filter-out $(DEP_DIR), $(SUBDIR))
 $(warning DEP_DIR have same dirs in SUBDIR, ignore them, DEP_DIR = $(DEP_DIR))
 endif
 ifeq (_$(BUILD_TYPE)_,_top_)
@@ -583,7 +583,7 @@ $(foreach file,$(CFILE),$(eval $(call COMPILE_C_template,$(file),$(addprefix $(O
 
 $(foreach file,$(CXXFILE),$(eval $(call COMPILE_CXX_template,$(file),$(addprefix $(OBJ_TEMP_DIR)/,$(basename $(file)).oo))))
 
-$(foreach mod,$(DEP_DIR),$(eval $(call COMPILE_DEP_DIR_template,$(mod),$(mod)/_$(mod).o)))
+$(foreach mod,$(DEP_DIR),$(eval $(call COMPILE_DEP_DIR_template,$(mod),$(mod)/_$(mod).o_mod)))
 
 $(foreach d,$(SUBDIR),$(eval $(call COMPILE_SUBDIR_template,$(d))))
 
@@ -643,9 +643,13 @@ gen_code_input: $(addprefix .,$(addsuffix .last,$(GEN_CODE_INPUT)))
 .PHONY: subdir
 subdir: $(addsuffix _dir,$(SUBDIR))
 
+# Depend directory build procedure
+.PHONY: depdir
+depdir: $(foreach mod,$(DEP_DIR),$(mod)/_$(mod).o_mod)
+
 # Main build procedure
 .PHONY: build
-build: subdir $(TARGET_FILENAME)
+build: subdir depdir $(TARGET_FILENAME)
 
 # Sub directory clean procedure 
 # Include clean for SUBDIR DEP_DIR and DEP_LIBS
