@@ -351,6 +351,11 @@ else
 	$(Q)${MAKE} gen_code
 endif
 ifeq (_$(Q)_,_@_)
+	$(Q)${MAKE} -s depend
+else
+	$(Q)${MAKE} depend
+endif
+ifeq (_$(Q)_,_@_)
 	$(Q)${MAKE} -s build
 else
 	$(Q)${MAKE} build
@@ -472,37 +477,20 @@ $(1)_dir:
 ifeq (_$$(filter $(1),$(DEP_DIR))_,__)
 ifeq (_$(Q)_,_@_)
 	$(Q)export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
-	${MAKE} depend -s -C $(1); \
 	${MAKE} -s -C $(1)
 else
 	$(Q)export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
-	${MAKE} depend -C $(1); \
 	${MAKE} -C $(1)
 endif
 endif
 endef
 
 # Define for main target procedure.
-# This rule will make depend lib it's generate $(DEP_LIBS) file by call make -c
+# This rule will make depend lib it's generate $(DEP_LIBS) file by call make -C
 # Notice here:
-# 	The different bewteen COMPILE_DEP_LIBS_template and COMPILE_CHECK_DEP_LIBS_template
-# The COMPILE_DEP_LIBS_template is called by main target procedure. This is not the real 
-# generation procedure for depend library but it support the dependance check for main 
-# target, if library's is modified and the target depend it will perceive its modify by
-# dependance and lead to taregt relink the library ( not only static-lib but also dyn-lib).
-# The COMPILE_CHECK_DEP_LIBS_template is the real procedure (make depend ) which will call 
-# before build procedure.
-define COMPILE_DEP_LIBS_template =
-$(1):
-ifeq (_$(Q)_,_@_)
-	$(Q)export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
-	${MAKE} -s -C $(dir $(1))
-else
-	$(Q)export LIB_DEPEND_SOURCE="$(LIB_DEPEND_SOURCE)"; \
-	${MAKE} -C $(dir $(1))
-endif
-endef
-
+# Before build main target its depend libs will be build by call make depend in 
+# current directory, and then make will use this function to build all of its 
+# depend lib.
 define COMPILE_CHECK_DEP_LIBS_template =
 depcheck_$(1):
 ifeq (_$(Q)_,_@_)
@@ -587,8 +575,6 @@ $(foreach mod,$(DEP_DIR),$(eval $(call COMPILE_DEP_DIR_template,$(mod),$(mod)/_$
 
 $(foreach d,$(SUBDIR),$(eval $(call COMPILE_SUBDIR_template,$(d))))
 
-$(foreach lib,$(DEP_LIBS),$(eval $(call COMPILE_DEP_LIBS_template,$(lib))))
-
 $(foreach lib,$(DEP_LIBS),$(eval $(call COMPILE_CHECK_DEP_LIBS_template,$(lib))))
 
 $(foreach gen_code,$(GEN_CODE_INPUT),$(eval $(call COMPILE_GEN_CODE_template,$(gen_code))))
@@ -597,7 +583,7 @@ $(foreach gen_code_script,$(wildcard $(notdir $(GEN_CODE_SCRIPT))),$(eval $(call
 
 # Main target link rule generate $(TARGET_FILENAME) file in current directory and depend its libs and 
 # all its obj file.
-$(TARGET_FILENAME): $(DEP_LIBS) $(OBJS_LIST)
+$(TARGET_FILENAME): $(OBJS_LIST)
 ifneq (_$(OBJS_LIST)_,__)
 ifeq (_$(filter top bin obj static-lib dyn-lib,$(BUILD_TYPE))_,__)
 	$(error Unkown build type: $(BUILD_TYPE))
